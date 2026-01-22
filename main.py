@@ -1314,7 +1314,7 @@ def main(page: ft.Page):
                 title=ft.Text("关于 My Omnis"),
                 content=ft.Column([
                     # 【核心修改】：删除了不存在的 Image，改用 Icon 防止报错，或者确保你有 icons/logo.png
-                    ft.Image(src="icons/logo.png", width=60, height=60, error_content=ft.Icon("pets", size=60, color=colors["orange"])),
+                    ft.Image(src="/logo.png", width=60, height=60, error_content=ft.Icon("pets", size=60, color=colors["orange"])),
                     
                     ft.Text("\n版本: v1.0.0 (Alpha)"),
                     ft.Text("开发: Python 3.14 + Flet"),
@@ -1466,4 +1466,4 @@ def main(page: ft.Page):
 if __name__ == "__main__":
     # 【核心】：使用 "." 作为 assets_dir，这是 GitHub 打包的最佳实践
     # 这样 Flet 才能找到你放在 icons 文件夹里的图片
-    ft.app(target=main, assets_dir=".")
+    ft.app(target=main, assets_dir="icons")
