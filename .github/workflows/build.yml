@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,7 +21,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Setup Java (Flutter 需要)
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
@@ -28,68 +31,20 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.x'  # 指定稳定版本，避免兼容性问题
+          flutter-version: '3.x'
 
-      - name: Install Python dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install flet
-
-      - name: Accept Android licenses
-        run: |
-          flutter config --no-analytics
-          yes | flutter doctor --android-licenses || true
-
-      # 【核心修复】：检查项目结构
-      - name: Verify project structure
-        run: |
-          echo "=== 检查项目文件 ==="
-          ls -la
-          echo "=== 检查 icons 文件夹 ==="
-          ls -la icons/
-          echo "=== 检查 flet.yaml ==="
-          cat flet.yaml || echo "❌ flet.yaml 不存在！"
 
       - name: Build APK
         run: |
-          # 【关键】：如果有 flet.yaml，直接用它；否则手动指定参数
-          if [ -f "flet.yaml" ]; then
-            echo "✅ 使用 flet.yaml 配置打包"
-            flet build apk -v
-          else
-            echo "⚠️ 未找到 flet.yaml，使用命令行参数"
-            flet build apk \
-              --project "MyOmnis" \
-              --description "PetLogApp" \
-              --org "com.tuntun" \
-              --company "TuntunInc" \
-              --icon "icons/logo.png" \
-              -v
-          fi
-
-      # 【新增】：如果构建失败，保存日志
-      - name: Save build logs on failure
-        if: failure()
-        run: |
-          echo "=== Flutter 诊断 ==="
-          flutter doctor -v
-          echo "=== 构建输出 ==="
-          cat build/flutter_build.log || echo "无日志文件"
+          # 强制仅打包纯代码，不带任何 extra assets，确保能启动
+          flet build apk --project "MyOmnisDebug" --description "DebugVersion" --org "com.tuntun" --product "Omnis Debug" -v
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MyOmnis-APK
-          path: build/apk/*.apk  # 【修复】：通配符匹配所有 apk
-          if-no-files-found: error
-
-      # 【可选】：自动创建 Release
-      - name: Create Release
-        if: github.ref == 'refs/heads/main' && success()
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          files: build/apk/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: MyOmnis-Debug-APK
+          path: build/apk/*.apk
