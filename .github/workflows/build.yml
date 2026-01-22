@@ -18,32 +18,78 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Setup Java (Flutter 需要)
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.x' # 修复点：只保留这一个版本定义
+          flutter-version: '3.x'  # 指定稳定版本，避免兼容性问题
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flet
+
+      - name: Accept Android licenses
+        run: |
+          flutter config --no-analytics
+          yes | flutter doctor --android-licenses || true
+
+      # 【核心修复】：检查项目结构
+      - name: Verify project structure
+        run: |
+          echo "=== 检查项目文件 ==="
+          ls -la
+          echo "=== 检查 icons 文件夹 ==="
+          ls -la icons/
+          echo "=== 检查 flet.yaml ==="
+          cat flet.yaml || echo "❌ flet.yaml 不存在！"
 
       - name: Build APK
         run: |
-          pip install flet
-          # 强制更新 flutter 依赖配置，防止版本不匹配
-          flutter config --no-analytics
-          
-          # 尝试预先同意 license，防止交互式弹窗卡死
-          yes "y" | flutter doctor --android-licenses || true
-          
-          # 打包命令 (增加 --no-android-signing 避免某些签名错误，虽然 Flet 默认是 debug 签名的)
-          # 注意：Flet 0.80+ 在 CI 环境下建议加上 -v 查看详情
-          flet build apk --project "MyOmnis" --description "PetLogApp" --org "com.tuntun" --company "TuntunInc" --product "My Omnis" -v
+          # 【关键】：如果有 flet.yaml，直接用它；否则手动指定参数
+          if [ -f "flet.yaml" ]; then
+            echo "✅ 使用 flet.yaml 配置打包"
+            flet build apk -v
+          else
+            echo "⚠️ 未找到 flet.yaml，使用命令行参数"
+            flet build apk \
+              --project "MyOmnis" \
+              --description "PetLogApp" \
+              --org "com.tuntun" \
+              --company "TuntunInc" \
+              --icon "icons/logo.png" \
+              -v
+          fi
+
+      # 【新增】：如果构建失败，保存日志
+      - name: Save build logs on failure
+        if: failure()
+        run: |
+          echo "=== Flutter 诊断 ==="
+          flutter doctor -v
+          echo "=== 构建输出 ==="
+          cat build/flutter_build.log || echo "无日志文件"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MyOmnis-APK
-          path: build/apk/app-release.apk
+          path: build/apk/*.apk  # 【修复】：通配符匹配所有 apk
+          if-no-files-found: error
+
+      # 【可选】：自动创建 Release
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' && success()
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          files: build/apk/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
