@@ -5,7 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-# 【修复 403】：给 Release 发布权限
 permissions:
   contents: write
 
@@ -22,7 +21,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 显式安装 Java 17，确保 Gradle 兼容性
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
@@ -42,9 +40,8 @@ jobs:
 
       - name: Build APK
         run: |
-          # 手动指定所有参数，不依赖 yaml
-          # 【重点】--icon 指定为 icons/icon.png
-          flet build apk --project "MyOmnis" --description "PetLog" --org "com.tuntun" --product "My Omnis" --icon "icons/icon.png" -v
+          # 【修复】：移除所有不支持的 CLI 参数，依靠 flet.yaml
+          flet build apk -v
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -52,7 +49,6 @@ jobs:
           name: MyOmnis-APK
           path: build/apk/*.apk
 
-      # 自动发布到 Releases 页面
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
