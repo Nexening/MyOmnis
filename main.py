@@ -186,7 +186,7 @@ def main(page: ft.Page):
                     _, ext = os.path.splitext(src_path)
                     # 例如: tuntun_avatar_1721534.jpg
                     new_filename = f"tuntun_avatar_{int(time.time())}{ext}"
-                    dst_path = str(Path.home().joinpath(new_filename)
+                    dst_path = str(Path.home().joinpath(new_filename))
                     
                     # 3. 复制新文件
                     shutil.copy(src_path, dst_path)
