@@ -1,0 +1,58 @@
+# Flet 打包配置文件
+# 文档: https://flet.dev/docs/guides/python/packaging-app-for-distribution
+
+# 基础信息
+name: MyOmnis
+description: PetLogApp
+version: 1.0.0
+author: TuntunInc
+product: My Omnis
+
+# 【核心】：应用图标配置
+icon: icons/logo.png
+
+# 安卓专用配置
+android:
+  # 包名 (反向域名格式)
+  package: com.tuntun.myomnis
+  
+  # 图标配置
+  icon: icons/logo.png
+  
+  # 【方案1】：透明背景小狗 + 白色底色（简洁优雅）
+  adaptive_icon_background: "#FFFFFF"  # 纯白底
+  adaptive_icon_foreground: icons/logo.png
+  
+  # 【方案2】：如果白狗看不清，用浅灰底
+  # adaptive_icon_background: "#F5F5F5"  # 浅灰底
+  
+  # 【方案3】：如果 logo 本身已包含背景，就不用 adaptive icon
+  # 直接注释掉 adaptive_icon_* 两行即可
+  
+  # 权限配置
+  permissions:
+    - android.permission.INTERNET
+    - android.permission.READ_EXTERNAL_STORAGE
+    - android.permission.WRITE_EXTERNAL_STORAGE
+  
+  # 最小安卓版本
+  min_sdk_version: 21  # Android 5.0
+  target_sdk_version: 33  # Android 13
+  
+  # 构建配置
+  build_number: 1
+
+# iOS 配置 (如果需要)
+ios:
+  icon: icons/logo.png
+  bundle_id: com.tuntun.myomnis
+  version: 1.0.0
+  build_number: 1
+
+# 资源目录
+assets_dir: icons
+
+# 编译优化
+compile:
+  python:
+    optimize: 2  # 优化级别 (0-2)

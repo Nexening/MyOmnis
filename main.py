@@ -5,7 +5,7 @@ import sqlite3
 import json # 用于存取事件列表
 import shutil # 用于复制文件
 import os     # 用于处理路径
-from pathlib import Path # 【新增】：用于智能获取全平台兼容路径
+from pathlib import Path # 【新增】：用于智能获取全平台兼容路径 (这是安卓不闪退的关键)
 
 # 1. 主程序
 def main(page: ft.Page):
@@ -41,9 +41,13 @@ def main(page: ft.Page):
     # page.bgcolor = "grey100" # 保持使用字符串颜色
     page.bgcolor = get_app_colors()["bg"] # 动态背景色
 
-    
-    # 【修复点】：删除了 page.theme 设置
-    # Flet 0.22.1 的 Theme 组件比较简单，我们直接用默认主题，确保不报错
+    # 【修复点】：使用 Theme 定义导航栏，解决字号问题
+    page.theme = ft.Theme(
+        navigation_bar_theme=ft.NavigationBarTheme(
+            label_text_style=ft.TextStyle(size=14, weight="bold"),
+            indicator_color=get_app_colors()["orange"] if page.theme_mode=="light" else "grey700"
+        )
+    )
     
     # ---------------------------------------------------
     # 页面 1: 吞吞日志 (SQLite + Timeline + 动态主题版)
@@ -51,14 +55,16 @@ def main(page: ft.Page):
     def get_log_view():
         colors = get_app_colors() # 获取动态颜色
 
-        # --- 1. 数据库初始化 (安卓防闪退终极版) ---
-        # 【修正2】：使用 Path.home() 获取跨平台可写路径
-        # 在 Windows 上是 C:\Users\你\tuntun.db
-        # 在 Android 上是 /data/user/0/com.tuntun/files/tuntun.db (可读写!)
+        # --- 1. 数据库初始化 (安卓防闪退 + 数据持久化版) ---
+        # 【核心修复】：使用 Path.home() 获取跨平台安全路径
+        # 在安卓上，这会指向 /data/user/0/com.你的包名/files/，这里的数据不会被系统随意清理
         db_path = str(Path.home().joinpath("tuntun.db"))
         
+        # 建立连接 (check_same_thread=False 允许在回调中使用)
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
+        
+        # 创建表：包含日期、时间、评分(星星)、事件列表(JSON字符串)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,6 +92,18 @@ def main(page: ft.Page):
         # 3.1 顶部筛选器 (Filter)
         filter_label = ft.Text(f"{today.year}年 {today.month}月", size=18, weight="bold", color=colors["text"])
         
+        # 提前定义按钮，防止后面引用报错
+        write_btn = ft.ElevatedButton(
+            content=ft.Row([
+                ft.Icon("edit", size=18, color="white"),
+                ft.Text("记一笔", size=16, weight="bold", color="white")
+            ], alignment="center", spacing=5),
+            style=ft.ButtonStyle(bgcolor=colors["orange"], color="white", elevation=10),
+            height=45,
+            # 注意：这里用 lambda 延迟调用，因为 show_write_modal 还没定义
+            on_click=lambda e: show_write_modal(e)
+        )
+
         # 3.2 列表容器 (Timeline) - 增加滚动监听
         log_list = ft.Column(
             scroll="hidden", 
@@ -180,13 +198,13 @@ def main(page: ft.Page):
                     # 必须在保存新文件之前删，防止万一新旧文件名一样导致冲突（虽然概率小）
                     safe_delete_old_avatar()
 
-                    # 2. 准备新路径
-                    # 使用时间戳作为文件名的一部分，彻底解决缓存不刷新的问题！
+                    # 2. 准备新路径 (使用 Path.home() 确保安卓兼容)
                     import time
                     _, ext = os.path.splitext(src_path)
                     # 例如: tuntun_avatar_1721534.jpg
                     new_filename = f"tuntun_avatar_{int(time.time())}{ext}"
-                    dst_path = str(Path.home().joinpath(new_filename))
+                    # 【核心修改】：存到 APP 私有数据目录
+                    dst_path = str(Path.home().joinpath(new_filename)) # 修复了之前的括号报错
                     
                     # 3. 复制新文件
                     shutil.copy(src_path, dst_path)
@@ -383,8 +401,6 @@ def main(page: ft.Page):
                 )
             
             # 【核心修复】：只有当 log_list 已经在页面上时，才调用 update()
-            # 第一次加载时，log_list.page 是 None，所以这行不会执行，避免报错
-            # 但数据已经塞进 log_list.controls 了，所以稍后页面渲染时会自动显示
             if log_list.page:
                 log_list.update()
 
@@ -436,13 +452,11 @@ def main(page: ft.Page):
                     is_active = i <= score
                     
                     # 【核心修改】：不依赖图片文件，直接用 Emoji
-                    # 激活状态：完全显示 (opacity=1.0)
-                    # 未激活状态：半透明 (opacity=0.25)，模拟“空心/未填色”的效果
                     op = 1.0 if is_active else 0.25
                     
                     stars_row.controls.append(
                         ft.Container(
-                            content=ft.Text("🦴", size=28), # 稍微大一点，可爱
+                            content=ft.Text("🦴", size=30), # 稍微大一点，可爱
                             opacity=op, # 通过透明度实现“亮/灭”效果
                             on_click=lambda e, s=i: update_star_ui(s),
                             padding=5,
@@ -563,17 +577,9 @@ def main(page: ft.Page):
         # 初始化时调用一次，确保根据当前偏好显示正确的星星/骨头
         update_star_ui(0)
 
-        # --- 6. 视图组装 ---
-        write_btn = ft.ElevatedButton(
-            content=ft.Row([
-                ft.Icon("edit", size=18, color="white"),
-                ft.Text("记一笔", size=16, weight="bold", color="white")
-            ], alignment="center", spacing=5),
-            style=ft.ButtonStyle(bgcolor=colors["orange"], color="white", elevation=10),
-            height=45,
-            on_click=show_write_modal
-        )
-        
+        # 初始化一次数据，确保刚进来有内容
+        refresh_timeline()
+
         # A. 时间轴视图 (Timeline)
         timeline_view = ft.Column(
             expand=True,
@@ -714,10 +720,6 @@ def main(page: ft.Page):
                 )
             ]
         )
-
-        # 初始化加载一次数据
-        refresh_timeline()
-        reset_event_rows()
 
         # 返回 Stack 结构，包含两个视图
         return ft.Stack(expand=True, controls=[timeline_view, write_view])
@@ -1023,17 +1025,6 @@ def main(page: ft.Page):
             btn_ot.bgcolor = "grey200"
             btn_ot_content.color = "black"
             
-        # --- 增加安卓物理返回键支持 ---
-        # 【修改点1】：监听键盘事件（安卓侧滑返回 = 键盘事件 "Back"）
-        def on_keyboard(e: ft.KeyboardEvent):
-            # 如果按下了返回键，且当前不是在菜单页（通过判断controls数量简单推断），则返回菜单
-            if e.key == "Back": 
-                # 这里简单判定：如果当前工具页有顶部栏（Blue/Orange），说明在子页面
-                # 为了安全，直接调用 show_menu，它会重置界面
-                show_menu()
-
-        page.on_keyboard_event = on_keyboard
-
         # 1. 菜单页
         def show_menu(e=None):
             current_view_status[0] = "menu" # 标记为菜单页
@@ -1245,7 +1236,9 @@ def main(page: ft.Page):
         def on_export_result(e: ft.FilePickerResultEvent):
             if e.path:
                 try:
-                    shutil.copy("tuntun.db", e.path)
+                    # 【核心修复】导出时使用正确的数据库路径 Path.home()
+                    db_src = str(Path.home().joinpath("tuntun.db"))
+                    shutil.copy(db_src, e.path)
                     page.snack_bar = ft.SnackBar(ft.Text("✅ 备份成功！"), bgcolor="green")
                     page.snack_bar.open = True
                     page.update()
@@ -1257,7 +1250,9 @@ def main(page: ft.Page):
         def on_import_result(e: ft.FilePickerResultEvent):
             if e.files:
                 try:
-                    shutil.copy(e.files[0].path, "tuntun.db")
+                    # 【核心修复】导入时覆盖到正确的数据库路径
+                    db_dst = str(Path.home().joinpath("tuntun.db"))
+                    shutil.copy(e.files[0].path, db_dst)
                     page.snack_bar = ft.SnackBar(ft.Text("✅ 恢复成功！请重启 App"), bgcolor="green")
                     page.snack_bar.open = True
                     page.update()
@@ -1327,11 +1322,17 @@ def main(page: ft.Page):
             page.dialog = ft.AlertDialog(
                 title=ft.Text("关于 My Omnis"),
                 content=ft.Column([
-                    ft.Image(src="icons/logo.png", width=60, height=60, error_content=ft.Icon("pets", size=60)),
+                    # 【核心修改】：删除了不存在的 Image，改用 Icon 防止报错
+                    ft.Image(
+                        src="/icons/logo.png",  # 自动从 assets_dir 加载
+                        width=60, 
+                        height=60, 
+                        error_content=ft.Icon("pets", size=60)
+                    ),
                     ft.Text("\n版本: v1.0.0 (Alpha)"),
-                    ft.Text("\n开发: Python 3.14 + Flet"),
-                    ft.Text("\n专门为吞吞和她的铲屎官们开发的百宝箱工具\n记录每一个可爱瞬间！\n(顺带便捷她爹的工作流)"),
-                ], tight=True, horizontal_alignment="center"),
+                    ft.Text("开发: Python 3.14 + Flet"),
+                    ft.Text("\n专门为吞吞开发的记录工具\n记录每一个可爱瞬间！\n(顺带便捷她爹的工作流)"),
+                ], tight=True, horizontal_alignment="center", spacing=5),
                 actions=[ft.TextButton("关闭", on_click=lambda _: setattr(page.dialog, 'open', False) or page.update())],
                 actions_alignment="center"
             )
@@ -1476,4 +1477,6 @@ def main(page: ft.Page):
     page.add(get_tools_view())
 
 if __name__ == "__main__":
-    ft.app(target=main, assets_dir="icons")
+    # 【核心】：使用 "." 作为 assets_dir，这是 GitHub 打包的最佳实践
+    # 这样 Flet 才能找到你放在 icons 文件夹里的图片
+    ft.app(target=main, assets_dir=".", view=ft.AppView.FLET_APP)
