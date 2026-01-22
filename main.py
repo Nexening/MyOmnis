@@ -5,10 +5,11 @@ import sqlite3
 import json # 用于存取事件列表
 import shutil # 用于复制文件
 import os     # 用于处理路径
-from pathlib import Path # 【新增】：用于智能获取全平台兼容路径 (这是安卓不闪退的关键)
+from pathlib import Path # 【新增】：用于智能获取全平台兼容路径
+import traceback # 【关键新增】：用于显示错误堆栈，拒绝白屏！
 
-# 1. 主程序
-def main(page: ft.Page):
+# 1. 核心逻辑 (原 main 函数的内容移到这里)
+def safe_main(page: ft.Page):
     # --- 0. 全局辅助函数 ---
     # 获取当前主题下的颜色配置
     def get_app_colors():
@@ -456,7 +457,7 @@ def main(page: ft.Page):
                     
                     stars_row.controls.append(
                         ft.Container(
-                            content=ft.Text("🦴", size=30), # 稍微大一点，可爱
+                            content=ft.Text("🦴", size=28), # 稍微大一点，可爱
                             opacity=op, # 通过透明度实现“亮/灭”效果
                             on_click=lambda e, s=i: update_star_ui(s),
                             padding=5,
@@ -577,9 +578,8 @@ def main(page: ft.Page):
         # 初始化时调用一次，确保根据当前偏好显示正确的星星/骨头
         update_star_ui(0)
 
-        # 初始化一次数据，确保刚进来有内容
-        refresh_timeline()
-
+        # --- 6. 视图组装 ---
+        
         # A. 时间轴视图 (Timeline)
         timeline_view = ft.Column(
             expand=True,
@@ -720,6 +720,10 @@ def main(page: ft.Page):
                 )
             ]
         )
+
+        # 初始化加载一次数据
+        refresh_timeline()
+        reset_event_rows()
 
         # 返回 Stack 结构，包含两个视图
         return ft.Stack(expand=True, controls=[timeline_view, write_view])
@@ -1236,9 +1240,7 @@ def main(page: ft.Page):
         def on_export_result(e: ft.FilePickerResultEvent):
             if e.path:
                 try:
-                    # 【核心修复】导出时使用正确的数据库路径 Path.home()
-                    db_src = str(Path.home().joinpath("tuntun.db"))
-                    shutil.copy(db_src, e.path)
+                    shutil.copy("tuntun.db", e.path)
                     page.snack_bar = ft.SnackBar(ft.Text("✅ 备份成功！"), bgcolor="green")
                     page.snack_bar.open = True
                     page.update()
@@ -1250,9 +1252,7 @@ def main(page: ft.Page):
         def on_import_result(e: ft.FilePickerResultEvent):
             if e.files:
                 try:
-                    # 【核心修复】导入时覆盖到正确的数据库路径
-                    db_dst = str(Path.home().joinpath("tuntun.db"))
-                    shutil.copy(e.files[0].path, db_dst)
+                    shutil.copy(e.files[0].path, "tuntun.db")
                     page.snack_bar = ft.SnackBar(ft.Text("✅ 恢复成功！请重启 App"), bgcolor="green")
                     page.snack_bar.open = True
                     page.update()
@@ -1322,16 +1322,12 @@ def main(page: ft.Page):
             page.dialog = ft.AlertDialog(
                 title=ft.Text("关于 My Omnis"),
                 content=ft.Column([
-                    # 【核心修改】：删除了不存在的 Image，改用 Icon 防止报错
-                    ft.Image(
-                        src="/icons/logo.png",  # 自动从 assets_dir 加载
-                        width=60, 
-                        height=60, 
-                        error_content=ft.Icon("pets", size=60)
-                    ),
+                    # 【核心修改】：删除了 Image，改用 Icon，这样不需要文件也能显示
+                    ft.Image(src="/icons/logo.png", width=60, height=60, error_content=ft.Icon("pets", size=60, color=colors["orange"])),
+                    
                     ft.Text("\n版本: v1.0.0 (Alpha)"),
                     ft.Text("开发: Python 3.14 + Flet"),
-                    ft.Text("\n专门为吞吞开发的记录工具\n记录每一个可爱瞬间！\n(顺带便捷她爹的工作流)"),
+                    ft.Text("\n专门为吞吞开发的记录工具，\n记录每一个可爱瞬间。❤️", text_align="center"),
                 ], tight=True, horizontal_alignment="center", spacing=5),
                 actions=[ft.TextButton("关闭", on_click=lambda _: setattr(page.dialog, 'open', False) or page.update())],
                 actions_alignment="center"
@@ -1393,6 +1389,7 @@ def main(page: ft.Page):
 
                     ft.Container(height=20),
 
+                    # 3. 评分/乖巧度图标 (【核心修改】：移到了最后)
                     ft.Row([
                         ft.Text("乖巧度图标:", size=16, color=colors["text"]),
                         ft.Container(width=20),
@@ -1476,7 +1473,35 @@ def main(page: ft.Page):
 
     page.add(get_tools_view())
 
+# 2. 外部包装 (Try-Catch 安全网)
+def main(page: ft.Page):
+    try:
+        # 尝试运行正常逻辑
+        safe_main(page)
+    except Exception as e:
+        # 如果崩溃，显示错误页面
+        page.clean()
+        error_msg = traceback.format_exc()
+        page.add(
+            ft.Column(
+                [
+                    ft.Icon(name=ft.icons.ERROR_OUTLINE, color="red", size=50),
+                    ft.Text("程序发生严重错误 (CRASH)", size=20, weight="bold", color="red"),
+                    ft.Text(f"错误信息:\n{e}", selectable=True),
+                    ft.Container(
+                        content=ft.Text(error_msg, font_family="monospace", size=10),
+                        bgcolor="#220000",
+                        padding=10,
+                        border_radius=5
+                    )
+                ],
+                scroll="always", 
+                expand=True
+            )
+        )
+        page.update()
+
 if __name__ == "__main__":
     # 【核心】：使用 "." 作为 assets_dir，这是 GitHub 打包的最佳实践
     # 这样 Flet 才能找到你放在 icons 文件夹里的图片
-    ft.app(target=main, assets_dir=".", view=ft.AppView.FLET_APP)
+    ft.app(target=main, assets_dir=".")
