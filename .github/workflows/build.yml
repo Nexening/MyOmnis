@@ -40,9 +40,8 @@ jobs:
 
       - name: Build APK
         run: |
-          # 强制仅打包纯代码，不带任何 extra assets，确保能启动
-          flet build apk --project "MyOmnisDebug" --description "DebugVersion" --org "com.tuntun" --product "Omnis Debug" -v
-
+          flet build apk --project "NoSqliteTest" --product "NoDB Test" -v
+    
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
