@@ -5,7 +5,7 @@ import sqlite3
 import json # 用于存取事件列表
 import shutil # 用于复制文件
 import os     # 用于处理路径
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path # 【新增】：用于智能获取全平台兼容路径
 
 # 1. 主程序
 def main(page: ft.Page):
@@ -51,39 +51,14 @@ def main(page: ft.Page):
     def get_log_view():
         colors = get_app_colors() # 获取动态颜色
 
-        # --- 1. 数据库初始化 ---
-        # 自动创建本地数据库文件 tuntun.db
-        # --- 1. 数据库初始化 (安卓防闪退修复版) ---
-        db_name = "tuntun.db"
-        # 默认路径 (Windows/电脑)
-        db_path = db_name
+        # --- 1. 数据库初始化 (安卓防闪退终极版) ---
+        # 【修正2】：使用 Path.home() 获取跨平台可写路径
+        # 在 Windows 上是 C:\Users\你\tuntun.db
+        # 在 Android 上是 /data/user/0/com.tuntun/files/tuntun.db (可读写!)
+        db_path = str(Path.home().joinpath("tuntun.db"))
         
-        # 如果是安卓环境，必须存到应用私有数据目录
-        # 我们利用 Flet 的 page.platform 来判断
-        if page.platform == ft.PagePlatform.ANDROID:
-            # 这是一个安卓通用的可读写路径技巧
-            from pathlib import Path
-            # 获取安卓内部存储路径
-            internal_storage = os.environ.get("ANDROID_DATA", "/data/user/0")
-            # 这里的路径比较硬核，但通常能用。更稳妥的是用 Flet 提供的 path provider (但在 0.22.1 可能需要特定写法)
-            # 我们先尝试用当前目录，如果 os.chdir 生效的话。
-            # 但为了保险，我们使用 try-except 机制
-            pass 
-
-        # 尝试连接，如果权限不足(安卓根目录)，则切换到临时目录
-        try:
-            conn = sqlite3.connect(db_path, check_same_thread=False)
-            cursor = conn.cursor()
-            cursor.execute("CREATE TABLE IF NOT EXISTS check_writable (id INTEGER)")
-        except:
-            # 如果报错，说明当前目录不可写，切换到临时目录
-            import tempfile
-            db_path = os.path.join(tempfile.gettempdir(), db_name)
-            conn = sqlite3.connect(db_path, check_same_thread=False)
-            print(f"⚠️ 切换数据库路径到: {db_path}")
-
+        conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
-        # 创建表：包含日期、时间、评分(星星)、事件列表(JSON字符串)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +186,7 @@ def main(page: ft.Page):
                     _, ext = os.path.splitext(src_path)
                     # 例如: tuntun_avatar_1721534.jpg
                     new_filename = f"tuntun_avatar_{int(time.time())}{ext}"
-                    dst_path = os.path.join(os.getcwd(), new_filename)
+                    dst_path = str(Path.home().joinpath(new_filename)
                     
                     # 3. 复制新文件
                     shutil.copy(src_path, dst_path)
@@ -1501,4 +1476,4 @@ def main(page: ft.Page):
     page.add(get_tools_view())
 
 if __name__ == "__main__":
-    ft.app(target=main, assets_dir=".")
+    ft.app(target=main, assets_dir="icons")
