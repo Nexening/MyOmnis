@@ -26,12 +26,20 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.x' # 适配 Flet 的 Flutter 版本
+          # 直接指定 Flet 要求的版本，避免它弹窗询问
+          flutter-version: '3.24.x' # 目前 Github Action 可能还不支持 3.38 (那是 dev 版?) 
+          # 等等，Flet 0.80.2 要求的其实是 Flutter 3.24+ 
+          # 最稳妥的写法是直接用 '3.x'，让它取最新的稳定版
+          channel: 'stable'
+          flutter-version: '3.x'
 
       - name: Build APK
         run: |
           # 安装 flet 命令行工具
           pip install flet
+          # 强制更新 flutter 依赖，防止版本不匹配
+          flutter config --no-analytics
+          
           # 开始打包
           # --project: 项目名
           # --description: 描述
