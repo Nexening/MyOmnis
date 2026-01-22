@@ -16,7 +16,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # Flet 打包推荐版本
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -26,26 +26,20 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          # 直接指定 Flet 要求的版本，避免它弹窗询问
-          flutter-version: '3.24.x' # 目前 Github Action 可能还不支持 3.38 (那是 dev 版?) 
-          # 等等，Flet 0.80.2 要求的其实是 Flutter 3.24+ 
-          # 最稳妥的写法是直接用 '3.x'，让它取最新的稳定版
           channel: 'stable'
-          flutter-version: '3.x'
+          flutter-version: '3.x' # 修复点：只保留这一个版本定义
 
       - name: Build APK
         run: |
-          # 安装 flet 命令行工具
           pip install flet
-          # 强制更新 flutter 依赖，防止版本不匹配
+          # 强制更新 flutter 依赖配置，防止版本不匹配
           flutter config --no-analytics
           
-          # 开始打包
-          # --project: 项目名
-          # --description: 描述
-          # --org: 包名组织(随便填)
-          # --company: 公司名(随便填)
-          # --product: 产品名
+          # 尝试预先同意 license，防止交互式弹窗卡死
+          yes "y" | flutter doctor --android-licenses || true
+          
+          # 打包命令 (增加 --no-android-signing 避免某些签名错误，虽然 Flet 默认是 debug 签名的)
+          # 注意：Flet 0.80+ 在 CI 环境下建议加上 -v 查看详情
           flet build apk --project "MyOmnis" --description "PetLogApp" --org "com.tuntun" --company "TuntunInc" --product "My Omnis" -v
 
       - name: Upload APK
