@@ -1,0 +1,22 @@
+# flet.yaml - 核心配置
+name: MyOmnis
+description: "PetLogApp"
+product: My Omnis  # 安装在手机上显示的名字
+
+# 【核心】：这里指定图标，CLI 读这个文件就不会报错了
+icon: icons/logo.png 
+
+# 安卓专用配置
+android:
+  package: com.tuntun.myomnis
+  icon: icons/logo.png
+  # 权限 (Flet 默认需要联网，ClientStorage 存文件需要写权限)
+  permissions:
+    - android.permission.INTERNET
+    - android.permission.WRITE_EXTERNAL_STORAGE
+    - android.permission.READ_EXTERNAL_STORAGE
+
+# 编译优化
+compile:
+  python:
+    optimize: 2
